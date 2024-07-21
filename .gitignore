@@ -1,49 +1,47 @@
-# History files
-.Rhistory
-.Rapp.history
+# Library
+library(readxl)
+library(dplyr)
 
-# Session Data files
-.RData
-.RDataTmp
+# Read the Excel data into a dataframe
+KualaLumpurDataset <- read_excel("University/4rd year sem1/FYP/Bayesian House Price Prediction/Dataset/KualaLumpurDataset.xlsx")
+view(KualaLumpurDataset)
 
-# User-specific files
-.Ruserdata
+# Convert Price and Size columns to numeric (assuming they contain digits only)
+# Only include 'property.type' with "condominium" for all variations 
+KualaLumpurDataset <- read_excel("University/4rd year sem1/FYP/Bayesian House Price Prediction/Dataset/KualaLumpurDataset.xlsx") %>%
+  mutate(property.type = factor(`Property Type`, levels = c("Condominium", "Condominium (Corner)", "Condominium (EndLot)","Condominium (Intermediate)"), labels = c("Condominium", "Condominium", "Condominium","Condominium")))  # Combine condo variations and others into "condominium"
+KualaLumpurDataset$Price <- as.numeric(gsub("\\D", "", KualaLumpurDataset$Price))
+KualaLumpurDataset$Size <- as.numeric(gsub("\\D", "", KualaLumpurDataset$Size))
 
-# Example code in package build process
-*-Ex.R
+#only take condominium type and location with frequency > 30
+location_counts <- KualaLumpurDataset %>%
+  filter(`Property Type` == "Condominium") %>%  # Filter for property type "condominium" first
+  group_by(Location) %>%  # Group by location (assuming unique identifiers)
+  summarise(count = n())   # Count observations per location and store in 'count'
 
-# Output files from R CMD build
-/*.tar.gz
+# Filter KualaLumpurDataset and keep only relevant columns
+filtered_data <- KualaLumpurDataset %>%
+  filter(`Property Type` == "Condominium") %>%  # Filter for property type "condominium"
+  select(Location, Price, Size, Furnishing, Bathrooms , `Car Parks`) %>%  # Select only location, price, and area columns
+  left_join(location_counts, by = "Location") %>%  # Join with observation counts
+  filter(count > 30 & Price > 10000 & Size > 1000 & Furnishing != 0 & Bathrooms > 0 & `Car Parks` > 0 )  # Filter by count, price, and area
 
-# Output files from R CMD check
-/*.Rcheck/
+# Define conversion mapping (replace with actual levels if they differ)
+furnishing_levels <- c("Unknown" = 0, "Unfurnished" = 1, "Partly Furnished" = 2, "Fully Furnished" = 3)
 
-# RStudio files
-.Rproj.user/
+# Add a new column with numeric furnishing codes
+filtered_data$furnishing_code <- factor(filtered_data$Furnishing, levels = names(furnishing_levels)) %>%
+  as.numeric(labels = furnishing_levels)
 
-# produced vignettes
-vignettes/*.html
-vignettes/*.pdf
+# Multiply area by furnishing level
+filtered_data$furnishing_area <- filtered_data$Size * filtered_data$furnishing_code
 
-# OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
-.httr-oauth
-
-# knitr and R markdown default cache directories
-*_cache/
-/cache/
-
-# Temporary files created by R markdown
-*.utf8.md
-*.knit.md
-
-# R Environment Variables
-.Renviron
-
-# pkgdown site
-docs/
-
-# translation temp files
-po/*~
-
-# RStudio Connect folder
-rsconnect/
+#Check
+House_new <- data.frame( price = filtered_data$Price,
+                         bathroom = filtered_data$Bathrooms,
+                         carpark = filtered_data$`Car Parks`,
+                         size = filtered_data$Size,
+                         Furnishing = filtered_data$furnishing_area,
+                         location = as.factor(filtered_data$Location));
+summary(House_new)
+view(House_new)
